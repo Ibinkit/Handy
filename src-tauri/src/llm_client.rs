@@ -37,11 +37,34 @@ struct ChatCompletionRequest {
     model: String,
     messages: Vec<ChatMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     response_format: Option<ResponseFormat>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning_effort: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning: Option<ReasoningConfig>,
+}
+
+/// Build the request body for a chat completion. Kept separate from the HTTP
+/// call so tests can assert on what actually goes over the wire.
+fn build_chat_request(
+    model: &str,
+    messages: Vec<ChatMessage>,
+    response_format: Option<ResponseFormat>,
+    reasoning_effort: Option<String>,
+    reasoning: Option<ReasoningConfig>,
+) -> ChatCompletionRequest {
+    ChatCompletionRequest {
+        model: model.to_string(),
+        messages,
+        // Dictation cleanup must be deterministic: identical input should
+        // paste identical output, not sampling noise.
+        temperature: Some(0.0),
+        response_format,
+        reasoning_effort,
+        reasoning,
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -180,13 +203,8 @@ pub async fn send_chat_completion_with_schema(
         },
     });
 
-    let request_body = ChatCompletionRequest {
-        model: model.to_string(),
-        messages,
-        response_format,
-        reasoning_effort,
-        reasoning,
-    };
+    let request_body =
+        build_chat_request(model, messages, response_format, reasoning_effort, reasoning);
 
     let response = client
         .post(&url)
@@ -288,6 +306,16 @@ mod tests {
     use super::*;
     use crate::settings::PostProcessProvider;
     use std::time::{Duration, Instant};
+
+    /// Cleanup must be deterministic and faithful to the input: the request
+    /// pins temperature to 0 so identical dictation gives identical output
+    /// instead of sampling-noise that randomly keeps fillers or rewrites.
+    #[test]
+    fn chat_requests_pin_temperature_to_zero() {
+        let body = serde_json::to_value(build_chat_request("m", Vec::new(), None, None, None))
+            .expect("request serializes");
+        assert_eq!(body["temperature"], 0.0);
+    }
 
     /// The LLM call must give up after its request timeout so the caller can
     /// fall back to pasting the raw transcription instead of hanging forever.

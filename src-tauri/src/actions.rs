@@ -1062,12 +1062,15 @@ mod tests {
 
         let mut failures = Vec::new();
         for (nr, spoken, expected) in cases {
+            let start = std::time::Instant::now();
             let output = tauri::async_runtime::block_on(super::post_process_transcription(
                 &settings, spoken,
             ));
+            let elapsed = start.elapsed();
             println!("\n=== CASE {} ===", nr);
             println!("input   : {}", spoken);
             println!("verwacht: {}", expected);
+            println!("latency : {} ms", elapsed.as_millis());
             match output {
                 Some(text) => println!("output  : {}", text),
                 None => {
