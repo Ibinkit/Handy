@@ -985,6 +985,104 @@ mod tests {
         ));
     }
 
+    /// PLAN.md §7 test matrix, cases 1-7: feeds the spoken-column text
+    /// through the real post-processing path against the live provider.
+    ///
+    /// Ignored by default because it needs network access plus an API key in
+    /// the app's settings store. Run with:
+    ///   cargo test --lib testmatrix -- --ignored --nocapture
+    /// Reads the store from $HANDY_SETTINGS_STORE, falling back to the
+    /// default app-data location.
+    #[test]
+    #[ignore]
+    fn testmatrix_fase3_cases_1_tot_7() {
+        let store_path = std::env::var("HANDY_SETTINGS_STORE").unwrap_or_else(|_| {
+            format!(
+                "{}/Library/Application Support/com.pais.handy/settings_store.json",
+                std::env::var("HOME").expect("HOME is set")
+            )
+        });
+        let raw_store = std::fs::read_to_string(&store_path)
+            .unwrap_or_else(|e| panic!("cannot read settings store {}: {}", store_path, e));
+        // tauri_plugin_store nests the settings object under a "settings" key.
+        let store: serde_json::Value =
+            serde_json::from_str(&raw_store).expect("settings store is valid JSON");
+        let settings: crate::settings::AppSettings =
+            serde_json::from_value(store["settings"].clone())
+                .expect("settings store parses as AppSettings");
+
+        let api_key = settings
+            .post_process_api_keys
+            .get(&settings.post_process_provider_id)
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            !api_key.trim().is_empty(),
+            "no API key configured for provider '{}' — enter it in Settings → Post-processing first",
+            settings.post_process_provider_id
+        );
+
+        let cases: [(&str, &str, &str); 7] = [
+            (
+                "1",
+                "eh nou ik denk uhm dat we dat morgen doen",
+                "Ik denk dat we dat morgen doen.",
+            ),
+            (
+                "2",
+                "dinsdag twee uur nee wacht woensdag vier uur",
+                "Woensdag vier uur. (zelfcorrectie opgelost)",
+            ),
+            (
+                "3",
+                "we moeten de pipeline nog reviewen voor de deal",
+                "Engelse termen blijven Engels",
+            ),
+            (
+                "4",
+                "ten eerste de offerte ten tweede de planning",
+                "nette lijst met twee punten",
+            ),
+            (
+                "5",
+                "het budget is twaalfhonderdvijftig euro op veertien juli",
+                "€1.250 op 14 juli",
+            ),
+            (
+                "6",
+                "wat vind jij eigenlijk van dit voorstel",
+                "de vraag verschijnt — geen antwoord",
+            ),
+            (
+                "7",
+                "tot zover punt nieuwe alinea dan nu het tweede deel",
+                "witregel op de juiste plek",
+            ),
+        ];
+
+        let mut failures = Vec::new();
+        for (nr, spoken, expected) in cases {
+            let output = tauri::async_runtime::block_on(super::post_process_transcription(
+                &settings, spoken,
+            ));
+            println!("\n=== CASE {} ===", nr);
+            println!("input   : {}", spoken);
+            println!("verwacht: {}", expected);
+            match output {
+                Some(text) => println!("output  : {}", text),
+                None => {
+                    println!("output  : <None — LLM-stap faalde, fallback zou raw plakken>");
+                    failures.push(nr);
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "cases zonder LLM-output (fallback-pad geraakt): {:?}",
+            failures
+        );
+    }
+
     #[test]
     fn completed_operation_returns_its_output() {
         let result = tauri::async_runtime::block_on(complete_unless_cancelled(
