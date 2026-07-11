@@ -988,6 +988,11 @@ mod tests {
     /// PLAN.md §7 test matrix, cases 1-7: feeds the spoken-column text
     /// through the real post-processing path against the live provider.
     ///
+    /// WERKAFSPRAAK: cases worden semantisch beoordeeld door een mens (of
+    /// een reviewende agent), nooit met exacte string-asserts — temperature
+    /// 0 is vrijwel maar niet gegarandeerd deterministisch. De enige harde
+    /// assert hier is dat de LLM-stap output geeft (geen fallback).
+    ///
     /// Ignored by default because it needs network access plus an API key in
     /// the app's settings store. Run with:
     ///   cargo test --lib testmatrix -- --ignored --nocapture
