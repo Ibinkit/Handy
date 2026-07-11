@@ -101,6 +101,7 @@ fn create_client(provider: &PostProcessProvider, api_key: &str) -> Result<reqwes
     let headers = build_headers(provider, api_key)?;
     reqwest::Client::builder()
         .default_headers(headers)
+        .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))
 }
@@ -217,6 +218,11 @@ pub async fn send_chat_completion_with_schema(
         .and_then(|choice| choice.message.content.clone()))
 }
 
+/// Hard ceiling on every LLM HTTP request. Dictation must never hang on a
+/// slow provider: when this fires the caller falls back to pasting the raw
+/// transcription (post_process_transcription returns None on error).
+pub const REQUEST_TIMEOUT_SECS: u64 = 7;
+
 /// Fetch available models from an OpenAI-compatible API
 /// Returns a list of model IDs
 pub async fn fetch_models(
@@ -275,4 +281,54 @@ pub async fn fetch_models(
     }
 
     Ok(models)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings::PostProcessProvider;
+    use std::time::{Duration, Instant};
+
+    /// The LLM call must give up after its request timeout so the caller can
+    /// fall back to pasting the raw transcription instead of hanging forever.
+    #[test]
+    fn chat_completion_times_out_against_unresponsive_server() {
+        // Bound but never accepted: connections land in the backlog and the
+        // HTTP request hangs until the client-side timeout fires.
+        let _listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        let port = _listener.local_addr().unwrap().port();
+
+        let provider = PostProcessProvider {
+            id: "custom".to_string(),
+            label: "Test".to_string(),
+            base_url: format!("http://127.0.0.1:{}/v1", port),
+            allow_base_url_edit: true,
+            models_endpoint: None,
+            supports_structured_output: false,
+        };
+
+        let start = Instant::now();
+        let result = tauri::async_runtime::block_on(async {
+            tokio::time::timeout(
+                Duration::from_secs(REQUEST_TIMEOUT_SECS + 5),
+                send_chat_completion(
+                    &provider,
+                    String::new(),
+                    "test-model",
+                    "hoi".to_string(),
+                    None,
+                    None,
+                ),
+            )
+            .await
+        });
+
+        let outcome = result.expect("request must abort via its own timeout, not hang");
+        assert!(outcome.is_err(), "unresponsive server must yield an error");
+        assert!(
+            start.elapsed() >= Duration::from_secs(REQUEST_TIMEOUT_SECS),
+            "error arrived before the timeout window; something else failed: {:?}",
+            outcome
+        );
+    }
 }

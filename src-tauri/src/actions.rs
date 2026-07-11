@@ -77,6 +77,16 @@ fn is_blank_transcription(transcription: &str) -> bool {
     transcription.trim().is_empty()
 }
 
+/// Utterances below this word count skip LLM cleanup: there is nothing to
+/// polish and the round-trip would only add latency.
+const MIN_POST_PROCESS_WORDS: usize = 4;
+
+/// Returns `true` when a transcription is too short to be worth an LLM
+/// round-trip: blank input, or fewer words than the cleanup threshold.
+fn should_skip_post_process(transcription: &str) -> bool {
+    transcription.split_whitespace().count() < MIN_POST_PROCESS_WORDS
+}
+
 async fn complete_unless_cancelled<F, C>(operation: F, is_cancelled: C) -> Option<F::Output>
 where
     F: Future,
@@ -104,6 +114,14 @@ fn should_use_streaming_overlay(style: OverlayStyle, is_streaming: bool) -> bool
 async fn post_process_transcription(settings: &AppSettings, transcription: &str) -> Option<String> {
     if is_blank_transcription(transcription) {
         debug!("Post-processing skipped because the transcription is empty");
+        return None;
+    }
+
+    if should_skip_post_process(transcription) {
+        debug!(
+            "Post-processing skipped because the transcription is shorter than {} words",
+            MIN_POST_PROCESS_WORDS
+        );
         return None;
     }
 
@@ -927,7 +945,10 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
 
 #[cfg(test)]
 mod tests {
-    use super::{complete_unless_cancelled, is_blank_transcription, should_use_streaming_overlay};
+    use super::{
+        complete_unless_cancelled, is_blank_transcription, should_skip_post_process,
+        should_use_streaming_overlay,
+    };
     use crate::settings::OverlayStyle;
     use std::future;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -946,6 +967,22 @@ mod tests {
     fn non_blank_transcription_is_kept() {
         assert!(!is_blank_transcription("hello"));
         assert!(!is_blank_transcription("  hello  "));
+    }
+
+    #[test]
+    fn short_transcriptions_skip_post_processing() {
+        assert!(should_skip_post_process(""));
+        assert!(should_skip_post_process("   "));
+        assert!(should_skip_post_process("oké"));
+        assert!(should_skip_post_process("ja is goed"));
+    }
+
+    #[test]
+    fn transcriptions_of_four_or_more_words_are_post_processed() {
+        assert!(!should_skip_post_process("ja dat is goed"));
+        assert!(!should_skip_post_process(
+            "eh nou ik denk dat we dat morgen doen"
+        ));
     }
 
     #[test]
