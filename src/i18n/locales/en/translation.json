@@ -420,7 +420,8 @@
         "createPrompt": "Create Prompt",
         "cancel": "Cancel",
         "selectToEdit": "Select a prompt above to view and edit its details.",
-        "createFirst": "Click 'Create New Prompt' above to create your first post-processing prompt."
+        "createFirst": "Click 'Create New Prompt' above to create your first post-processing prompt.",
+        "codeOwnedNotice": "This built-in prompt is managed by the app: edits made here are moved to a separate “NL dictaat — aangepast” prompt when the app ships an updated version."
       }
     },
     "history": {

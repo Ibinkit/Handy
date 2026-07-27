@@ -22,6 +22,10 @@ import { usePostProcessProviderState } from "../PostProcessingSettingsApi/usePos
 import { ShortcutInput } from "../ShortcutInput";
 import { useSettings } from "../../../hooks/useSettings";
 
+// Must match NL_DICTATION_PROMPT_ID in src-tauri/src/settings.rs: this prompt
+// is code-owned and re-seeded on version bumps (edits are moved to a copy).
+const SHIPPED_NL_PROMPT_ID = "nl_dictation_cleanup";
+
 const PostProcessingSettingsApiComponent: React.FC = () => {
   const { t } = useTranslation();
   const state = usePostProcessProviderState();
@@ -289,6 +293,11 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
 
         {!isCreating && hasPrompts && selectedPrompt && (
           <div className="space-y-3">
+            {selectedPrompt.id === SHIPPED_NL_PROMPT_ID && (
+              <Alert variant="info">
+                {t("settings.postProcessing.prompts.codeOwnedNotice")}
+              </Alert>
+            )}
             <div className="space-y-2 flex flex-col">
               <label className="text-sm font-semibold">
                 {t("settings.postProcessing.prompts.promptLabel")}

@@ -426,6 +426,11 @@ pub struct AppSettings {
     /// Missing in older stores → 0 → re-seed. Fresh installs stamp current.
     #[serde(default)]
     pub nl_dictation_prompt_seed_version: u32,
+    /// Exact prompt text the seeder last wrote for the shipped NL prompt.
+    /// Lets a version bump tell user edits (stored text differs from this)
+    /// apart from an untouched seed, so edits are backed up before overwrite.
+    #[serde(default)]
+    pub nl_dictation_prompt_last_seeded: String,
     #[serde(default)]
     pub post_process_selected_prompt_id: Option<String>,
     #[serde(default)]
@@ -724,8 +729,18 @@ pub const NL_DICTATION_PROMPT_ID: &str = "nl_dictation_cleanup";
 /// Bump this whenever the shipped NL dictation prompt text changes: stores
 /// with an older seed version get the prompt re-seeded at load. The shipped
 /// prompt is code-owned — direct edits to it in the UI are overwritten on a
-/// version bump; custom prompts should be separate entries.
+/// version bump (after being copied to their own "aangepast" entry); custom
+/// prompts should be separate entries.
 pub const NL_DICTATION_PROMPT_SEED_VERSION: u32 = 1;
+
+/// The prompt text of the currently shipped NL dictation prompt.
+fn shipped_nl_prompt_text() -> String {
+    default_post_process_prompts()
+        .into_iter()
+        .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+        .expect("default prompts include the NL dictation prompt")
+        .prompt
+}
 
 fn default_post_process_prompts() -> Vec<LLMPrompt> {
     vec![LLMPrompt {
@@ -832,18 +847,52 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
             .into_iter()
             .find(|p| p.id == NL_DICTATION_PROMPT_ID)
             .expect("default prompts include the NL dictation prompt");
-        match settings
+        let shipped_idx = settings
             .post_process_prompts
-            .iter_mut()
-            .find(|p| p.id == NL_DICTATION_PROMPT_ID)
-        {
-            Some(existing) => {
-                existing.name = default_prompt.name;
-                existing.prompt = default_prompt.prompt;
+            .iter()
+            .position(|p| p.id == NL_DICTATION_PROMPT_ID);
+        match shipped_idx {
+            Some(idx) => {
+                // A stored text that differs from what the seeder wrote was
+                // edited by the user; preserve it in its own entry before the
+                // overwrite so a bump can never destroy their work.
+                let stored = settings.post_process_prompts[idx].prompt.clone();
+                let edited = !stored.trim().is_empty()
+                    && stored != settings.nl_dictation_prompt_last_seeded
+                    && stored != default_prompt.prompt;
+                if edited {
+                    let backup_id = format!(
+                        "{}_aangepast_v{}",
+                        NL_DICTATION_PROMPT_ID, settings.nl_dictation_prompt_seed_version
+                    );
+                    if !settings
+                        .post_process_prompts
+                        .iter()
+                        .any(|p| p.id == backup_id)
+                    {
+                        settings.post_process_prompts.push(LLMPrompt {
+                            id: backup_id,
+                            name: format!(
+                                "NL dictaat — aangepast (v{})",
+                                settings.nl_dictation_prompt_seed_version
+                            ),
+                            prompt: stored,
+                        });
+                    }
+                }
+                settings.post_process_prompts[idx].name = default_prompt.name;
+                settings.post_process_prompts[idx].prompt = default_prompt.prompt.clone();
             }
-            None => settings.post_process_prompts.push(default_prompt),
+            None => settings.post_process_prompts.push(default_prompt.clone()),
         }
+        settings.nl_dictation_prompt_last_seeded = default_prompt.prompt;
         settings.nl_dictation_prompt_seed_version = NL_DICTATION_PROMPT_SEED_VERSION;
+        changed = true;
+    } else if settings.nl_dictation_prompt_last_seeded.is_empty() {
+        // Stores written before last_seeded existed: backfill it with the
+        // current shipped text (which is what the seeder wrote at this
+        // version), so the next bump can detect edits made from here on.
+        settings.nl_dictation_prompt_last_seeded = shipped_nl_prompt_text();
         changed = true;
     }
 
@@ -943,6 +992,7 @@ pub fn get_default_settings() -> AppSettings {
         post_process_models: default_post_process_models(),
         post_process_prompts: default_post_process_prompts(),
         nl_dictation_prompt_seed_version: NL_DICTATION_PROMPT_SEED_VERSION,
+        nl_dictation_prompt_last_seeded: shipped_nl_prompt_text(),
         post_process_selected_prompt_id: Some(NL_DICTATION_PROMPT_ID.to_string()),
         mute_while_recording: false,
         append_trailing_space: false,
@@ -1294,6 +1344,122 @@ mod tests {
                 .unwrap()
                 .prompt,
             "eigen aangepaste prompt ${output}"
+        );
+    }
+
+    /// A user-edited shipped prompt must never be silently destroyed by a
+    /// version bump: the edited text is first copied to its own entry, then
+    /// the shipped prompt is overwritten with the new default.
+    #[test]
+    fn nl_prompt_user_edit_is_backed_up_before_reseed() {
+        let mut settings = get_default_settings();
+        settings.nl_dictation_prompt_seed_version = 0;
+        settings.nl_dictation_prompt_last_seeded = "oude default ${output}".to_string();
+        settings
+            .post_process_prompts
+            .iter_mut()
+            .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+            .expect("NL prompt present")
+            .prompt = "bewerkt door gebruiker ${output}".to_string();
+
+        assert!(ensure_post_process_defaults(&mut settings));
+
+        let backup = settings
+            .post_process_prompts
+            .iter()
+            .find(|p| p.id != NL_DICTATION_PROMPT_ID && p.name.contains("aangepast"))
+            .expect("edited prompt must be preserved in its own entry");
+        assert_eq!(backup.prompt, "bewerkt door gebruiker ${output}");
+
+        let shipped = settings
+            .post_process_prompts
+            .iter()
+            .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+            .unwrap();
+        assert!(shipped.prompt.contains("vulwoorden"));
+        assert_eq!(settings.nl_dictation_prompt_last_seeded, shipped.prompt);
+    }
+
+    /// An unedited store (stored text equals what the seeder wrote) gets the
+    /// new prompt without a pointless backup copy.
+    #[test]
+    fn nl_prompt_unedited_store_is_not_backed_up_on_reseed() {
+        let mut settings = get_default_settings();
+        settings.nl_dictation_prompt_seed_version = 0;
+        settings.nl_dictation_prompt_last_seeded = "oude default ${output}".to_string();
+        settings
+            .post_process_prompts
+            .iter_mut()
+            .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+            .expect("NL prompt present")
+            .prompt = "oude default ${output}".to_string();
+
+        assert!(ensure_post_process_defaults(&mut settings));
+        assert!(
+            !settings
+                .post_process_prompts
+                .iter()
+                .any(|p| p.name.contains("aangepast")),
+            "unedited prompt must not spawn a backup entry"
+        );
+    }
+
+    /// A backup id that already exists (e.g. a re-run after a crash between
+    /// backup and store write) must not produce duplicate entries.
+    #[test]
+    fn nl_prompt_backup_is_not_duplicated() {
+        let mut settings = get_default_settings();
+        settings.nl_dictation_prompt_seed_version = 0;
+        settings.nl_dictation_prompt_last_seeded = "oude default ${output}".to_string();
+        settings
+            .post_process_prompts
+            .iter_mut()
+            .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+            .unwrap()
+            .prompt = "bewerkt ${output}".to_string();
+        settings.post_process_prompts.push(LLMPrompt {
+            id: format!("{}_aangepast_v0", NL_DICTATION_PROMPT_ID),
+            name: "NL dictaat — aangepast (v0)".to_string(),
+            prompt: "eerdere backup ${output}".to_string(),
+        });
+
+        assert!(ensure_post_process_defaults(&mut settings));
+        assert_eq!(
+            settings
+                .post_process_prompts
+                .iter()
+                .filter(|p| p.id == format!("{}_aangepast_v0", NL_DICTATION_PROMPT_ID))
+                .count(),
+            1
+        );
+    }
+
+    /// Stores written before `nl_dictation_prompt_last_seeded` existed get it
+    /// backfilled at the current version, so the next real bump can tell
+    /// user edits apart from the seeded text.
+    #[test]
+    fn nl_prompt_last_seeded_is_backfilled_at_current_version() {
+        let mut settings = get_default_settings();
+        settings.nl_dictation_prompt_last_seeded = String::new();
+        let shipped_before = settings
+            .post_process_prompts
+            .iter()
+            .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+            .unwrap()
+            .prompt
+            .clone();
+
+        assert!(ensure_post_process_defaults(&mut settings));
+        assert_eq!(settings.nl_dictation_prompt_last_seeded, shipped_before);
+        // Backfill records provenance only; the prompt itself is untouched.
+        assert_eq!(
+            settings
+                .post_process_prompts
+                .iter()
+                .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+                .unwrap()
+                .prompt,
+            shipped_before
         );
     }
 

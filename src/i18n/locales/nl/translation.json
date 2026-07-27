@@ -420,7 +420,8 @@
         "createPrompt": "Prompt maken",
         "cancel": "Annuleren",
         "selectToEdit": "Selecteer hierboven een prompt om de details te bekijken en te bewerken.",
-        "createFirst": "Klik hierboven op 'Nieuwe prompt maken' om je eerste naverwerkingsprompt aan te maken."
+        "createFirst": "Klik hierboven op 'Nieuwe prompt maken' om je eerste naverwerkingsprompt aan te maken.",
+        "codeOwnedNotice": "Deze ingebouwde prompt wordt door de app beheerd: bewerkingen hier worden bij een app-update verplaatst naar een aparte prompt “NL dictaat — aangepast”."
       }
     },
     "history": {
