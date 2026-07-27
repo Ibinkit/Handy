@@ -1463,6 +1463,68 @@ mod tests {
         );
     }
 
+    /// Design lock: after a bump that backs up a user edit, the shipped id
+    /// stays selected and now carries the NEW default. The active prompt must
+    /// be the new default (so later features relying on it work), never the
+    /// preserved copy — that copy is a fallback the user can re-select.
+    #[test]
+    fn nl_prompt_bump_keeps_new_default_active_not_the_backup() {
+        let mut settings = get_default_settings();
+        settings.nl_dictation_prompt_seed_version = 0;
+        settings.nl_dictation_prompt_last_seeded = "oude default ${output}".to_string();
+        settings.post_process_selected_prompt_id = Some(NL_DICTATION_PROMPT_ID.to_string());
+        settings
+            .post_process_prompts
+            .iter_mut()
+            .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+            .expect("NL prompt present")
+            .prompt = "bewerkt door gebruiker ${output}".to_string();
+
+        assert!(ensure_post_process_defaults(&mut settings));
+
+        // Selection is untouched, so the active prompt is the shipped id...
+        assert_eq!(
+            settings.post_process_selected_prompt_id.as_deref(),
+            Some(NL_DICTATION_PROMPT_ID)
+        );
+        // ...which now holds the new default, not the user's old text.
+        let active = settings
+            .post_process_prompts
+            .iter()
+            .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+            .unwrap();
+        assert!(active.prompt.contains("vulwoorden"));
+        assert_ne!(active.prompt, "bewerkt door gebruiker ${output}");
+        // The edit survives as a separately-selectable backup.
+        assert!(settings
+            .post_process_prompts
+            .iter()
+            .any(|p| p.prompt == "bewerkt door gebruiker ${output}"
+                && p.id != NL_DICTATION_PROMPT_ID));
+    }
+
+    /// last_seeded must be refreshed on EVERY seed path, including when the
+    /// shipped prompt was deleted from the store and gets re-added — otherwise
+    /// the freshly re-added prompt would look "edited" on the next bump.
+    #[test]
+    fn nl_prompt_last_seeded_refreshed_when_prompt_was_missing() {
+        let mut settings = get_default_settings();
+        settings.nl_dictation_prompt_seed_version = 0;
+        settings.nl_dictation_prompt_last_seeded = "oude default ${output}".to_string();
+        settings
+            .post_process_prompts
+            .retain(|p| p.id != NL_DICTATION_PROMPT_ID);
+
+        assert!(ensure_post_process_defaults(&mut settings));
+
+        let shipped = settings
+            .post_process_prompts
+            .iter()
+            .find(|p| p.id == NL_DICTATION_PROMPT_ID)
+            .expect("NL prompt re-added");
+        assert_eq!(settings.nl_dictation_prompt_last_seeded, shipped.prompt);
+    }
+
     /// Every field must survive a partial store: a missing key must never fail
     /// the whole-settings parse (#1619). `json!({})` is the extreme case.
     #[test]

@@ -647,13 +647,30 @@ pub fn run(cli_args: CliArgs) {
             managers::transcription::StreamPhaseEvent,
         ]);
 
-    #[cfg(debug_assertions)] // <- Only export on non-release builds
-    specta_builder
-        .export(
-            Typescript::default().bigint(BigIntExportBehavior::Number),
-            "../src/bindings.ts",
-        )
-        .expect("Failed to export typescript bindings");
+    // Only export on non-release builds. The app re-runs this on every debug
+    // start; writing bindings.ts unconditionally rewrites a Vite-watched
+    // source file and triggers HMR (and needless dev-watcher churn) on every
+    // launch, so only overwrite it when the generated content actually changed.
+    #[cfg(debug_assertions)]
+    {
+        let bindings_path = std::path::Path::new("../src/bindings.ts");
+        let mut tmp = std::env::temp_dir();
+        tmp.push("handy-bindings.ts");
+        specta_builder
+            .export(
+                Typescript::default().bigint(BigIntExportBehavior::Number),
+                &tmp,
+            )
+            .expect("Failed to export typescript bindings");
+        let generated = std::fs::read_to_string(&tmp).expect("read generated bindings");
+        let unchanged = std::fs::read_to_string(bindings_path)
+            .map(|existing| existing == generated)
+            .unwrap_or(false);
+        if !unchanged {
+            std::fs::write(bindings_path, generated).expect("write bindings.ts");
+        }
+        let _ = std::fs::remove_file(&tmp);
+    }
 
     let invoke_handler = specta_builder.invoke_handler();
 

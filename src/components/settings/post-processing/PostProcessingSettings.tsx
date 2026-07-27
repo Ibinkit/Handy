@@ -160,6 +160,13 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
   const selectedPrompt =
     prompts.find((prompt) => prompt.id === selectedPromptId) || null;
 
+  // Backups the re-seeder made from earlier UI edits to the shipped prompt.
+  // Their presence is the visible confirmation that an edit was preserved
+  // (the shipped prompt itself now carries the new default).
+  const shippedPromptBackups = prompts.filter((prompt) =>
+    prompt.id.startsWith(`${SHIPPED_NL_PROMPT_ID}_aangepast_v`),
+  );
+
   useEffect(() => {
     if (isCreating) return;
 
@@ -298,6 +305,14 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
                 {t("settings.postProcessing.prompts.codeOwnedNotice")}
               </Alert>
             )}
+            {selectedPrompt.id === SHIPPED_NL_PROMPT_ID &&
+              shippedPromptBackups.length > 0 && (
+                <Alert variant="success">
+                  {t("settings.postProcessing.prompts.editPreservedNotice", {
+                    names: shippedPromptBackups.map((p) => p.name).join(", "),
+                  })}
+                </Alert>
+              )}
             <div className="space-y-2 flex flex-col">
               <label className="text-sm font-semibold">
                 {t("settings.postProcessing.prompts.promptLabel")}
