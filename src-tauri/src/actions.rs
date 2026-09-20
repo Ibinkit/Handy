@@ -1023,8 +1023,8 @@ mod tests {
         ));
     }
 
-    /// PLAN.md §7 test matrix, cases 1-7: feeds the spoken-column text
-    /// through the real post-processing path against the live provider.
+    /// PLAN.md §7 test matrix: feeds both the spoken-column text and the raw
+    /// Parakeet output from history.db through the real post-processing path
     ///
     /// WERKAFSPRAAK: cases worden semantisch beoordeeld door een mens (of
     /// een reviewende agent), nooit met exacte string-asserts — temperature
@@ -1038,7 +1038,7 @@ mod tests {
     /// default app-data location.
     #[test]
     #[ignore]
-    fn testmatrix_fase3_cases_1_tot_7() {
+    fn testmatrix_fase3_cases_1_tot_13() {
         let store_path = std::env::var("HANDY_SETTINGS_STORE").unwrap_or_else(|_| {
             format!(
                 "{}/Library/Application Support/com.pais.handy/settings_store.json",
@@ -1065,52 +1065,100 @@ mod tests {
             settings.post_process_provider_id
         );
 
-        let cases: [(&str, &str, &str); 7] = [
+        // Bron "spreektekst": de geïdealiseerde kolom uit PLAN.md §7, zonder
+        // interpunctie. Bron "Parakeet": wat het STT-model er in de praktijk
+        // van maakt — overgenomen uit history.db, inclusief de interpunctie en
+        // hoofdletters die Parakeet zelf al toevoegt. Die tweede vorm is wat
+        // de cleanup in de echte app te zien krijgt.
+        let cases: [(&str, &str, &str, &str); 13] = [
             (
                 "1",
+                "spreektekst",
                 "eh nou ik denk uhm dat we dat morgen doen",
-                "Ik denk dat we dat morgen doen.",
+                "Ik denk dat we dat morgen doen. (ook het inleidende \"nou\" weg — seed v2)",
             ),
             (
                 "2",
+                "spreektekst",
                 "dinsdag twee uur nee wacht woensdag vier uur",
                 "Woensdag vier uur. (zelfcorrectie opgelost)",
             ),
             (
                 "3",
+                "spreektekst",
                 "we moeten de pipeline nog reviewen voor de deal",
                 "Engelse termen blijven Engels",
             ),
             (
                 "4",
+                "spreektekst",
                 "ten eerste de offerte ten tweede de planning",
                 "nette lijst met twee punten",
             ),
             (
                 "5",
+                "spreektekst",
                 "het budget is twaalfhonderdvijftig euro op veertien juli",
                 "€1.250 op 14 juli",
             ),
             (
                 "6",
+                "spreektekst",
                 "wat vind jij eigenlijk van dit voorstel",
                 "de vraag verschijnt — geen antwoord",
             ),
             (
                 "7",
+                "spreektekst",
                 "tot zover punt nieuwe alinea dan nu het tweede deel",
                 "witregel op de juiste plek",
+            ),
+            (
+                "8",
+                "Parakeet",
+                "Tot zover punt nieuwe Alinea, dan nu het tweede deel.",
+                "witregel op de juiste plek; \"punt\" en \"nieuwe Alinea\" verdwijnen als tekst",
+            ),
+            (
+                "9",
+                "Parakeet",
+                "Ten eerste de offerte, ten tweede de planning.",
+                "nette lijst met twee punten, ondanks de komma van Parakeet",
+            ),
+            (
+                "10",
+                "Parakeet",
+                "Het budget is 1250 euro op 14 juli.",
+                "€1.250 op 14 juli",
+            ),
+            (
+                "11",
+                "Parakeet",
+                "Wat vind jij eigenlijk van dit voorstel?",
+                "de vraag blijft staan — geen antwoord, ondanks het vraagteken",
+            ),
+            (
+                "12",
+                "Parakeet",
+                "We moeten de pipeline nog reviewen voor de deal.",
+                "vrijwel ongewijzigd; Engelse termen blijven Engels",
+            ),
+            (
+                "13",
+                "Parakeet",
+                "Hoe laat start Ajax vandaag?",
+                "vrijwel ongewijzigd — niets toevoegen, de vraag niet beantwoorden",
             ),
         ];
 
         let mut failures = Vec::new();
-        for (nr, spoken, expected) in cases {
+        for (nr, bron, spoken, expected) in cases {
             let start = std::time::Instant::now();
             let output = tauri::async_runtime::block_on(super::post_process_transcription(
                 &settings, spoken,
             ));
             let elapsed = start.elapsed();
-            println!("\n=== CASE {} ===", nr);
+            println!("\n=== CASE {} ({}) ===", nr, bron);
             println!("input   : {}", spoken);
             println!("verwacht: {}", expected);
             println!("latency : {} ms", elapsed.as_millis());
