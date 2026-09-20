@@ -47,6 +47,12 @@ impl Drop for FinishGuard {
 pub trait ShortcutAction: Send + Sync {
     fn start(&self, app: &AppHandle, binding_id: &str, shortcut_str: &str);
     fn stop(&self, app: &AppHandle, binding_id: &str, shortcut_str: &str);
+
+    /// Whether this action asks for LLM cleanup on the transcription it
+    /// produces. Only transcribe actions ever do.
+    fn wants_post_process(&self) -> bool {
+        false
+    }
 }
 
 // Transcribe Action
@@ -85,6 +91,16 @@ const MIN_POST_PROCESS_WORDS: usize = 4;
 /// round-trip: blank input, or fewer words than the cleanup threshold.
 fn should_skip_post_process(transcription: &str) -> bool {
     transcription.split_whitespace().count() < MIN_POST_PROCESS_WORDS
+}
+
+/// Whether a transcription that asked for cleanup actually gets it.
+///
+/// Cleanup is this fork's default dictation behaviour: it hangs off the single
+/// transcribe shortcut rather than a separate one. The post-processing toggle
+/// stays authoritative, so turning the feature off returns plain dictation
+/// instead of leaving the shortcut without an action.
+fn resolve_post_process(requested: bool, post_process_enabled: bool) -> bool {
+    requested && post_process_enabled
 }
 
 async fn complete_unless_cancelled<F, C>(operation: F, is_cancelled: C) -> Option<F::Output>
@@ -479,6 +495,10 @@ pub(crate) async fn process_transcription_output(
 }
 
 impl ShortcutAction for TranscribeAction {
+    fn wants_post_process(&self) -> bool {
+        self.post_process
+    }
+
     fn start(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         let start_time = Instant::now();
         debug!("TranscribeAction::start called for binding: {}", binding_id);
@@ -662,7 +682,8 @@ impl ShortcutAction for TranscribeAction {
         play_feedback_sound(app, SoundType::Stop);
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
-        let post_process = self.post_process;
+        let post_process =
+            resolve_post_process(self.post_process, get_settings(app).post_process_enabled);
         let cancel_generation = rm.cancel_generation();
 
         tauri::async_runtime::spawn(async move {
@@ -922,11 +943,10 @@ impl ShortcutAction for TestAction {
 // Static Action Map
 pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::new(|| {
     let mut map = HashMap::new();
+    // The dictation shortcut cleans up by default; see resolve_post_process.
     map.insert(
         "transcribe".to_string(),
-        Arc::new(TranscribeAction {
-            post_process: false,
-        }) as Arc<dyn ShortcutAction>,
+        Arc::new(TranscribeAction { post_process: true }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
         "transcribe_with_post_process".to_string(),
@@ -946,8 +966,8 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
 #[cfg(test)]
 mod tests {
     use super::{
-        complete_unless_cancelled, is_blank_transcription, should_skip_post_process,
-        should_use_streaming_overlay,
+        complete_unless_cancelled, is_blank_transcription, resolve_post_process,
+        should_skip_post_process, should_use_streaming_overlay,
     };
     use crate::settings::OverlayStyle;
     use std::future;
@@ -955,6 +975,24 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
+
+    #[test]
+    fn dictation_shortcut_requests_cleanup() {
+        // The single dictation shortcut is the cleanup shortcut; there is no
+        // raw-transcription binding to fall back to.
+        let action = super::ACTION_MAP
+            .get("transcribe")
+            .expect("transcribe action is registered");
+        assert!(action.wants_post_process());
+    }
+
+    #[test]
+    fn cleanup_follows_the_post_processing_toggle() {
+        assert!(resolve_post_process(true, true));
+        // Feature switched off: dictation still works, just without cleanup.
+        assert!(!resolve_post_process(true, false));
+        assert!(!resolve_post_process(false, true));
+    }
 
     #[test]
     fn blank_transcription_is_detected() {

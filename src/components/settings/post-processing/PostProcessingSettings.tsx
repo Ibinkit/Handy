@@ -19,7 +19,6 @@ import { BaseUrlField } from "../PostProcessingSettingsApi/BaseUrlField";
 import { ApiKeyField } from "../PostProcessingSettingsApi/ApiKeyField";
 import { ModelSelect } from "../PostProcessingSettingsApi/ModelSelect";
 import { usePostProcessProviderState } from "../PostProcessingSettingsApi/usePostProcessProviderState";
-import { ShortcutInput } from "../ShortcutInput";
 import { useSettings } from "../../../hooks/useSettings";
 
 // Must match NL_DICTATION_PROMPT_ID in src-tauri/src/settings.rs: this prompt
@@ -454,11 +453,9 @@ export const PostProcessingSettings: React.FC = () => {
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
       <SettingsGroup title={t("settings.postProcessing.hotkey.title")}>
-        <ShortcutInput
-          shortcutId="transcribe_with_post_process"
-          descriptionMode="tooltip"
-          grouped={true}
-        />
+        <p className="text-sm text-mid-gray">
+          {t("settings.postProcessing.hotkey.usesDictationShortcut")}
+        </p>
       </SettingsGroup>
 
       <SettingsGroup title={t("settings.postProcessing.api.title")}>

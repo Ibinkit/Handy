@@ -433,8 +433,9 @@ pub fn init_shortcuts(app: &AppHandle) -> Result<(), String> {
         if id == "cancel" {
             continue;
         }
-        // Skip post-processing shortcut when the feature is disabled
-        if id == "transcribe_with_post_process" && !user_settings.post_process_enabled {
+        // Cleanup hangs off the single dictation shortcut in this fork, so the
+        // separate post-processing binding is never registered as its own key.
+        if id == "transcribe_with_post_process" {
             continue;
         }
 
