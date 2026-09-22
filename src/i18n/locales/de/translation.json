@@ -371,7 +371,8 @@
     },
     "postProcessing": {
       "hotkey": {
-        "title": "Tastenkürzel"
+        "title": "Tastenkürzel",
+        "usesDictationShortcut": "Die Bereinigung läuft über dein Diktat-Tastenkürzel, es gibt also kein separates Tastenkürzel für die reine Transkription."
       },
       "api": {
         "title": "API (OpenAI-kompatibel)",
@@ -420,7 +421,9 @@
         "createPrompt": "Prompt erstellen",
         "cancel": "Abbrechen",
         "selectToEdit": "Wähle oben einen Prompt aus, um dessen Details anzuzeigen und zu bearbeiten.",
-        "createFirst": "Klicke oben auf 'Neuen Prompt erstellen', um deinen ersten Nachbearbeitungs-Prompt zu erstellen."
+        "createFirst": "Klicke oben auf 'Neuen Prompt erstellen', um deinen ersten Nachbearbeitungs-Prompt zu erstellen.",
+        "codeOwnedNotice": "Dieser integrierte Prompt wird von der App verwaltet: Hier vorgenommene Änderungen werden in einen separaten Prompt „NL dictaat — aangepast“ verschoben, sobald die App eine aktualisierte Version ausliefert.",
+        "editPreservedNotice": "Deine vorherige Anpassung wurde als separater Prompt gesichert: {{names}}. Wähle ihn oben aus, um zurückzuwechseln."
       }
     },
     "history": {

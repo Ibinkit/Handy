@@ -203,8 +203,13 @@ pub async fn send_chat_completion_with_schema(
         },
     });
 
-    let request_body =
-        build_chat_request(model, messages, response_format, reasoning_effort, reasoning);
+    let request_body = build_chat_request(
+        model,
+        messages,
+        response_format,
+        reasoning_effort,
+        reasoning,
+    );
 
     let response = client
         .post(&url)

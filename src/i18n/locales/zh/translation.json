@@ -371,7 +371,8 @@
     },
     "postProcessing": {
       "hotkey": {
-        "title": "快捷键"
+        "title": "快捷键",
+        "usesDictationShortcut": "清理会在你的听写快捷键上运行，因此没有单独的原始转录快捷键。"
       },
       "api": {
         "title": "API（兼容 OpenAI）",
@@ -420,7 +421,9 @@
         "createPrompt": "创建提示词",
         "cancel": "取消",
         "selectToEdit": "选择上方的提示词以查看和编辑其详细信息。",
-        "createFirst": "点击上方的「创建新提示词」来创建您的第一个后处理提示词。"
+        "createFirst": "点击上方的「创建新提示词」来创建您的第一个后处理提示词。",
+        "codeOwnedNotice": "此内置提示词由应用管理：当应用发布更新版本时，你在此处所做的修改会被移至单独的“NL dictaat — aangepast”提示词中。",
+        "editPreservedNotice": "你之前的自定义内容已保留为单独的提示词：{{names}}。在上方选择它即可切换回去。"
       }
     },
     "history": {

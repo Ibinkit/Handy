@@ -371,7 +371,8 @@
     },
     "postProcessing": {
       "hotkey": {
-        "title": "Phím tắt"
+        "title": "Phím tắt",
+        "usesDictationShortcut": "Việc dọn dẹp chạy bằng phím tắt đọc chính tả của bạn, vì vậy không có phím tắt riêng cho bản phiên âm thô."
       },
       "api": {
         "title": "API (Tương thích OpenAI)",
@@ -420,7 +421,9 @@
         "createPrompt": "Tạo Prompt",
         "cancel": "Hủy",
         "selectToEdit": "Chọn một prompt ở trên để xem và chỉnh sửa chi tiết.",
-        "createFirst": "Nhấn 'Tạo Prompt mới' ở trên để tạo prompt xử lý sau đầu tiên của bạn."
+        "createFirst": "Nhấn 'Tạo Prompt mới' ở trên để tạo prompt xử lý sau đầu tiên của bạn.",
+        "codeOwnedNotice": "Prompt tích hợp này do ứng dụng quản lý: các chỉnh sửa thực hiện ở đây sẽ được chuyển sang một prompt riêng “NL dictaat — aangepast” khi ứng dụng phát hành phiên bản cập nhật.",
+        "editPreservedNotice": "Tùy chỉnh trước đây của bạn đã được giữ lại dưới dạng một prompt riêng: {{names}}. Chọn nó ở trên để chuyển về."
       }
     },
     "history": {

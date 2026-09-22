@@ -371,7 +371,8 @@
     },
     "postProcessing": {
       "hotkey": {
-        "title": "Kısayol Tuşu"
+        "title": "Kısayol Tuşu",
+        "usesDictationShortcut": "Temizleme, dikte kısayol tuşunuzla çalışır; bu nedenle ham transkripsiyon için ayrı bir kısayol tuşu yoktur."
       },
       "api": {
         "title": "API (OpenAI Uyumlu)",
@@ -420,7 +421,9 @@
         "createPrompt": "Prompt Oluştur",
         "cancel": "İptal",
         "selectToEdit": "Ayrıntılarını görüntülemek ve düzenlemek için yukarıdan bir prompt seçin.",
-        "createFirst": "İlk son işlem prompt'unuzu oluşturmak için yukarıdaki “Yeni Prompt Oluştur” seçeneğine tıklayın."
+        "createFirst": "İlk son işlem prompt'unuzu oluşturmak için yukarıdaki “Yeni Prompt Oluştur” seçeneğine tıklayın.",
+        "codeOwnedNotice": "Bu yerleşik prompt uygulama tarafından yönetilir: burada yaptığınız düzenlemeler, uygulama güncellenmiş bir sürüm yayınladığında ayrı bir “NL dictaat — aangepast” promptuna taşınır.",
+        "editPreservedNotice": "Önceki özelleştirmeniz ayrı bir prompt olarak korundu: {{names}}. Geri dönmek için yukarıdan onu seçin."
       }
     },
     "history": {
